@@ -50,7 +50,8 @@
             protocol: "https",
             host: "api.redmetrics.io",
             port: 443,
-            bufferingDelay: 5000 
+            bufferingDelay: 5000,
+            player: {}
         });
 
         // Build base URL
@@ -69,7 +70,7 @@
             return Q.xhr({
                 url: redmetrics.options.baseUrl + "/v1/player/",
                 method: "POST",
-                data: "{}",
+                data: JSON.stringify(redmetrics.options.player),
                 contentType: "application/json"
             }).then(function(result) {
                 redmetrics.connected = true;
@@ -126,6 +127,22 @@
 
         return postDeferred.promise;
     };
+
+    redmetrics.updatePlayer = function(player) {
+        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
+
+        return Q.xhr({
+            url: redmetrics.options.baseUrl + "/v1/player/" + playerId,
+            method: "PUT",
+            data: JSON.stringify(redmetrics.options.player),
+            contentType: "application/json"
+        }).then(function() {
+            redmetrics.options.player = player;
+            return redmetrics.options.player;
+        }).fail(function(error) {
+            throw new Error("Cannot update player:", error)
+        });
+    }
 
     return redmetrics;
 }));

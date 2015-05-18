@@ -7,15 +7,19 @@ describe("RedMetrics.js", function() {
       bufferingDelay: 0
     });
 
+    beforeEach(function(done) {
+      redmetrics.connect(config).fin(function() {
+          expect(redmetrics.connected).toBe(true);
+          done();
+      });
+    });
+
     afterEach(function() {
         redmetrics.disconnect();
     });
 
-    it("can connect to a server", function(done) {
-        redmetrics.connect(config).fin(function() {
-            expect(redmetrics.connected).toBe(true);
-            done();
-        });
+    it("can connect to a server", function() {
+        expect(redmetrics.connected).toBe(true);
     });
 
     it("can't connect to an inexistant server", function(done) {
@@ -28,15 +32,8 @@ describe("RedMetrics.js", function() {
         });
     });
 
-    describe("Can post events", function() {
-      beforeEach(function(done) {
-        redmetrics.connect(config).fin(function() {
-            expect(redmetrics.connected).toBe(true);
-            done();
-        });
-      });
-
-      it("can post single event", function(done) {
+    describe("can post events", function() {
+      it("just one", function(done) {
         redmetrics.postEvent({
           type: "start",
           section: [1, 2]
@@ -46,7 +43,7 @@ describe("RedMetrics.js", function() {
         });
       });
 
-      it("can post multiple events", function(done) {
+      it("multiple ones", function(done) {
         redmetrics.postEvent({
           type: "start",
           section: [1, 2]
@@ -60,4 +57,13 @@ describe("RedMetrics.js", function() {
         });
       });
     }); 
+
+    it("can update player", function(done) {
+      redmetrics.updatePlayer({
+        externalId: "azer"
+      }).fin(function() {
+        expect(redmetrics.options.player.externalId).toBe("azer");
+        done();
+      });
+    });
 });
