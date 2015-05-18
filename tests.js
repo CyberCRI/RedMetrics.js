@@ -112,12 +112,27 @@ describe("RedMetrics.js", function() {
       });
     }); 
 
-    it("can update player", function(done) {
-      redmetrics.updatePlayer({
-        externalId: "azer"
-      }).fin(function() {
-        expect(redmetrics.options.player.externalId).toBe("azer");
-        done();
+    describe("player", function() {
+      it("can be provided at connection time", function(done) {
+        var connectionOptions = _.extend({}, config, {
+          player: {
+            externalId: "1234"
+          }
+        });
+        redmetrics.connect(connectionOptions).fin(function() {
+          expect(redmetrics.connected).toBe(true);
+          expect(redmetrics.options.player.externalId).toBe("1234");
+          done();
+        });
+      });
+
+      it("can update player", function(done) {
+        redmetrics.updatePlayer({
+          externalId: "azer"
+        }).fin(function() {
+          expect(redmetrics.options.player.externalId).toBe("azer");
+          done();
+        });
       });
     });
 });
