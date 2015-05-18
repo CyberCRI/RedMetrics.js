@@ -85,6 +85,8 @@
     }
 
     redmetrics.connect = function(connectionOptions) {
+        if(redmetrics.connected) throw new Error("RedMetrics is already connected. Call redmetrics.disconnect() before connecting again.");
+
         // Get options passed to the factory. Works even if connectionOptions is undefined 
         redmetrics.options = _.defaults({}, connectionOptions, {
             protocol: "https",
