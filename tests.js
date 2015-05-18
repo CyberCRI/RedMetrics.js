@@ -4,7 +4,10 @@ describe("RedMetrics.js", function() {
     });
 
     it("can connect to a server", function(done) {
-        redmetrics.connect(RedMetricsConfig).done(function() {
+        var config = typeof(RedMetricsConfig) !== "undefined" ? RedMetricsConfig : {};
+        //if(typeof(RedMetricsConfig) !== "undefined") config = RedMetricsConfig;
+
+        redmetrics.connect(config).done(function() {
             expect(redmetrics.connected).toBe(true);
             done();
         });
