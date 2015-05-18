@@ -99,10 +99,21 @@
             redmetrics.options.baseUrl = redmetrics.options.protocol + "://" + redmetrics.options.host + ":" + redmetrics.options.port;
         }
 
+        if(!redmetrics.options.gameVersionId) {
+            throw new Error("Missing options.gameVersionId");
+        }
+
         function getStatus() {
             return Q.xhr.get(redmetrics.options.baseUrl + "/status").fail(function(error) {
                 redmetrics.connected = false;
                 throw new Error("Cannot connect to RedMetrics server", redmetrics.options.baseUrl);
+            });
+        }
+
+        function checkGameVersion() {
+            return Q.xhr.get(redmetrics.options.baseUrl + "/v1/gameVersion/" + redmetrics.options.gameVersionId).fail(function(error) {
+                redmetrics.connected = false;
+                throw new Error("Invalid gameVersionId");
             });
         }
 
@@ -126,7 +137,7 @@
             });
         }
 
-        return getStatus().then(createPlayer);
+        return getStatus().then(checkGameVersion).then(createPlayer);
     };
 
     redmetrics.disconnect = function() {

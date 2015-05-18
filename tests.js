@@ -2,10 +2,11 @@ describe("RedMetrics.js", function() {
     // Use a local test configuration if available
     //var config = typeof(RedMetricsConfig) !== "undefined" ? RedMetricsConfig : {};
 
-    // Set the delay to nothing so thatthe tests don't timeout (and to speed things up!)
+    // Set the delay to nothing so that the tests don't timeout (and to speed things up!)
     var config = _.defaults({}, RedMetricsConfig, {
       bufferingDelay: 0
     });
+
 
     beforeEach(function(done) {
       redmetrics.connect(config).fin(function() {
@@ -18,18 +19,39 @@ describe("RedMetrics.js", function() {
         redmetrics.disconnect();
     });
 
-    it("can connect to a server", function() {
-        expect(redmetrics.connected).toBe(true);
-    });
+    describe("can connect", function() {
+      it("can connect to a server", function() {
+          expect(redmetrics.connected).toBe(true);
+      });
 
-    it("can't connect to an inexistant server", function(done) {
-        var badOptions = {
-            host: "notredmetrics.io"
-        };
-        redmetrics.connect(badOptions).fin(function() {
-            expect(redmetrics.connected).toBe(false);
-            done();
-        });
+      it("can't connect to an inexistant server", function() {
+          var badOptions = _.omit(config, ["gameVersionId"]);
+          function connectWithBadOptions() {
+            redmetrics.connect(badOptions);
+          };
+          expect(connectWithBadOptions).toThrow();
+      });
+
+      it("can't omit game version", function(done) {
+          var badOptions = {
+              host: "notredmetrics.io",
+              gameVersionId: config.gameVersionId
+          };
+          redmetrics.connect(badOptions).fin(function() {
+              expect(redmetrics.connected).toBe(false);
+              done();
+          });
+      });
+
+      it("can't use an inexistant game version", function(done) {
+          var badOptions = _.extend({}, config, {
+            gameVersionId: "1234"
+          });
+          redmetrics.connect(badOptions).fin(function() {
+              expect(redmetrics.connected).toBe(false);
+              done();
+          });
+      });
     });
 
     describe("can post events:", function() {
