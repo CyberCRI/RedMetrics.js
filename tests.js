@@ -32,13 +32,13 @@ describe("RedMetrics.js", function() {
         });
     });
 
-    describe("can post events", function() {
+    describe("can post events:", function() {
       it("just one", function(done) {
         redmetrics.postEvent({
           type: "start",
           section: [1, 2]
         }).then(function(result) {
-          expect(result).toBe(1);
+          expect(result.events).toBe(1);
           done();
         });
       });
@@ -52,7 +52,39 @@ describe("RedMetrics.js", function() {
           type: "end",
           section: [1, 2]
         }).then(function(result) {
-          expect(result).toBe(2);
+          expect(result.events).toBe(2);
+          done();
+        });
+      });
+    }); 
+
+    describe("can post snapshots:", function() {
+      it("just one", function(done) {
+        redmetrics.postSnapshot({
+          customData: {
+            a: 1,
+            b: 2
+          }
+        }).then(function(result) {
+          expect(result.snapshots).toBe(1);
+          done();
+        });
+      });
+
+      it("multiple ones", function(done) {
+        redmetrics.postSnapshot({
+          customData: {
+            a: 1,
+            b: 2
+          }
+        });
+        redmetrics.postSnapshot({
+          customData: {
+            a: 2,
+            b: 1
+          }
+        }).then(function(result) {
+          expect(result.snapshots).toBe(2);
           done();
         });
       });

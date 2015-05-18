@@ -11,6 +11,7 @@
 }(this, function (b) {
     var playerId = null;
     var eventQueue = [];
+    var snapshotQueue = [];
     var postDeferred = null;
     var timerId = null;
 
@@ -23,25 +24,64 @@
         return new Date().toISOString();
     }
 
-    function postData() {
-        if(eventQueue.length == 0) return;
+    function sendData() {
+        if(eventQueue.length == 0 && snapshotQueue == 0) return;
 
-        Q.xhr({
+        Q.spread([sendEvents(), sendSnapshots()], function(eventCount, snaphotCount) {
+            postDeferred.resolve({
+                events: eventCount,
+                snapshots: snaphotCount
+            });
+        }).fail(function(error) {
+            postDeferred.reject(new Error("Error posting data: " + error));
+        }).fin(function() {
+            // Create new deferred
+            postDeferred = Q.defer();
+        });
+    }
+
+    function sendEvents() {
+        if(eventQueue.length == 0) return Q.fcall(function() { 
+            return 0; 
+        });
+
+        var request = Q.xhr({
             url: redmetrics.options.baseUrl + "/v1/event/",
             method: "POST",
             data: JSON.stringify(eventQueue),
             contentType: "application/json"
         }).then(function(result) {
-            postDeferred.resolve(result.data.length);
+           return result.data.length;
         }).fail(function(error) {
-            postDeferred.reject(new Error("Error posting events: " + error));
-        }).fin(function() {
-            // Create new deferred
-            postDeferred = Q.defer();
-        })
+            throw new Error("Error posting events: " + error);
+        });
 
         // Clear queue
         eventQueue = [];
+
+        return request;
+    }
+
+    function sendSnapshots() {
+        if(snapshotQueue.length == 0) return Q.fcall(function() { 
+            return 0; 
+        });
+
+        var request = Q.xhr({
+            url: redmetrics.options.baseUrl + "/v1/snapshot/",
+            method: "POST",
+            data: JSON.stringify(snapshotQueue),
+            contentType: "application/json"
+        }).then(function(result) {
+            return result.data.length;
+        }).fail(function(error) {
+            throw new Error("Error posting snapshots: " + error);
+        });
+
+        // Clear queue
+        snapshotQueue = [];
+
+        return request;
     }
 
     redmetrics.connect = function(connectionOptions) {
@@ -79,7 +119,7 @@
                 postDeferred = Q.defer();
 
                 // Start sending events
-                timerId = window.setInterval(postData, redmetrics.options.bufferingDelay)
+                timerId = window.setInterval(sendData, redmetrics.options.bufferingDelay)
             }).fail(function(error) {
                 redmetrics.connected = false;
                 throw new Error("Cannot create player: " + error);
@@ -120,6 +160,22 @@
         }
 
         eventQueue.push(_.extend(event, {
+            gameVersion: redmetrics.options.gameVersionId,
+            player: playerId,
+            userTime: getUserTime()
+        }));
+
+        return postDeferred.promise;
+    };
+
+    redmetrics.postSnapshot = function(snapshot) {
+        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
+
+        if(snapshot.section && _.isArray(snapshot.section)) {
+            snapshot.section = snapshot.section.join(".");
+        }
+
+        snapshotQueue.push(_.extend(snapshot, {
             gameVersion: redmetrics.options.gameVersionId,
             player: playerId,
             userTime: getUserTime()
