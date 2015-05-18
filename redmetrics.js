@@ -9,38 +9,123 @@
         root.redmetrics = factory(root.b);
     }
 }(this, function (b) {
-    var baseUrl = "";
+    var playerId = null;
+    var eventQueue = [];
+    var postDeferred = null;
+    var timerId = null;
 
     var redmetrics = {
-        connected: false
+        connected: false,
+        options: {}
     };
 
-    redmetrics.connect = function(options) {
-        // Get options passed to the factory. Works even if options is undefined 
-        options = _.defaults({}, options, {
+    function getUserTime() {
+        return new Date().toISOString();
+    }
+
+    function postData() {
+        if(eventQueue.length == 0) return;
+
+        Q.xhr({
+            url: redmetrics.options.baseUrl + "/v1/event/",
+            method: "POST",
+            data: JSON.stringify(eventQueue),
+            contentType: "application/json"
+        }).then(function(result) {
+            postDeferred.resolve(result.data.length);
+        }).fail(function(error) {
+            postDeferred.reject(new Error("Error posting events: " + error));
+        }).fin(function() {
+            // Create new deferred
+            postDeferred = Q.defer();
+        })
+
+        // Clear queue
+        eventQueue = [];
+    }
+
+    redmetrics.connect = function(connectionOptions) {
+        // Get options passed to the factory. Works even if connectionOptions is undefined 
+        redmetrics.options = _.defaults({}, connectionOptions, {
             protocol: "https",
             host: "api.redmetrics.io",
-            port: 443
+            port: 443,
+            bufferingDelay: 5000 
         });
 
         // Build base URL
-        if(!options.baseUrl) {
-            options.baseUrl = options.protocol + "://" + options.host + ":" + options.port;
-            console.log("base URL", options.baseUrl);
+        if(!redmetrics.options.baseUrl) {
+            redmetrics.options.baseUrl = redmetrics.options.protocol + "://" + redmetrics.options.host + ":" + redmetrics.options.port;
         }
 
-        return Q.xhr.get(options.baseUrl + "/status").then(function(resp) {
-            console.log('status is ' + resp.data);
-            redmetrics.connected = true;
-        }).fail(function(error) {
-            console.error("Cannot connect to RedMetrics server @ π", options.baseUrl)
-        });
+        function getStatus() {
+            return Q.xhr.get(redmetrics.options.baseUrl + "/status").fail(function(error) {
+                redmetrics.connected = false;
+                throw new Error("Cannot connect to RedMetrics server", redmetrics.options.baseUrl);
+            });
+        }
+
+        function createPlayer() {
+            return Q.xhr({
+                url: redmetrics.options.baseUrl + "/v1/player/",
+                method: "POST",
+                data: "{}",
+                contentType: "application/json"
+            }).then(function(result) {
+                redmetrics.connected = true;
+                playerId = result.data.id;
+
+                postDeferred = Q.defer();
+
+                // Start sending events
+                timerId = window.setInterval(postData, redmetrics.options.bufferingDelay)
+            }).fail(function(error) {
+                redmetrics.connected = false;
+                throw new Error("Cannot create player: " + error);
+            });
+        }
+
+        return getStatus().then(createPlayer);
     };
 
     redmetrics.disconnect = function() {
+        // TODO: flush event queue ?
+
+        // Reset state 
         redmetrics.connected = false;
+        redmetrics.options = {};
+        playerId = null;
+        eventQueue = [];
+
+        if(timerId) {
+            window.clearInterval(timerId);
+            timerId = null;
+        }
+
+        if(postDeferred) {
+            postDeferred.reject(new Error("RedMetrics was disconnected by user"));
+            postDeferred = null;
+        }
+
+        // Return empty promise
+        return Q.fcall(function() {}); 
     };
 
+    redmetrics.postEvent = function(event) {
+        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
+
+        if(event.section && _.isArray(event.section)) {
+            event.section = event.section.join(".");
+        }
+
+        eventQueue.push(_.extend(event, {
+            gameVersion: redmetrics.options.gameVersionId,
+            player: playerId,
+            userTime: getUserTime()
+        }));
+
+        return postDeferred.promise;
+    };
 
     return redmetrics;
 }));
