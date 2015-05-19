@@ -2,6 +2,8 @@
 
 JavaScript browser client for the open source game analytics service [RedMetrics.io](https://redmetrics.io). RedMetrics.js buffers requests and uses promises to make integration easy. 
 
+We have also included a bridge for Unity games running within the browser using the WebPlayer.
+
 
 ## Use
 
@@ -10,16 +12,16 @@ JavaScript browser client for the open source game analytics service [RedMetrics
 The simplest way to install RedMetrics.js is via bower:
 
 ```
-bower install redmetrics.js
+bower install RedMetrics.js
 ```
 
 RedMetrics.js can be included as a global dependency or via an AMD module (like RequireJS). For example, here are the script tags necessary to include it as a global dependency.
 
-```
+```html
 <script type="text/javascript" src="bower_components/q/q.js"></script>
 <script type="text/javascript" src="bower_components/q-xhr/q-xhr.js"></script>
 <script type="text/javascript" src="bower_components/underscore/underscore.js"></script>
-<script type="text/javascript" src="bower_components/redmetrics.js/redmetrics.js"></script>
+<script type="text/javascript" src="bower_components/RedMetrics.js/redmetrics.js"></script>
 ```
 
 ### Example
@@ -116,6 +118,43 @@ Alternatively, a player object can be provided as an connection option.
 ### Promises
 
 RedMetrics.js uses the [Q library](https://github.com/kriskowal/q) so that all methods return promises. A promise returned by postEvent() or postSnapshot() will only be fulfilled when the data is sent to the server.
+
+
+## Unity Bridge
+
+Games developed with Unity via their web player should have direct access to RedMetrics via the WWW class. However in practice certain requests are blocked. To get around this problem, you can have your game communicate with RedMetrics.js within the web page, and have RedMetrics.js handle the link to the server.
+
+To make this process easy, we have created a bridge script, `redmetrics-unity.js`, that can be called via Unity using the `Application.ExternalCall()` method. To get around limitations with this method, all parameters are serialized into JSON strings before being sent.
+
+
+### Use
+
+After installing RedMetrics.js as described above, include `redmetrics-unity.js` in your HTML page as well as the other dependencies:
+
+```html
+<script type="text/javascript" src="bower_components/q/q.js"></script>
+<script type="text/javascript" src="bower_components/q-xhr/q-xhr.js"></script>
+<script type="text/javascript" src="bower_components/underscore/underscore.js"></script>
+<script type="text/javascript" src="bower_components/RedMetrics.js/redmetrics.js"></script>
+<script type="text/javascript" src="bower_components/RedMetrics.js/redmetrics.js"></script>
+``
+
+Then you call `rmConnect()` from Unity, passing as an argument an options object serialized to a JSON string. 
+
+```C#
+string connectionOptions = "{ \"gameVersionId\": \"XXXXX\" }"; 
+Application.ExternalCall("rmConnect", connectionOptions);
+```
+
+Currently the bridge does not inform your Unity game of whether the communication is working or not. You can verify it by watching the JavaScript console within the browser. 
+
+The Unity bridge offers the following methods, mirroring the RedMetrics.js API:
+
+* rmConnect(optionsJson)
+* rmDisconnect()
+* rmPostEvent(eventJson)
+* rmPostSnapshot(snapshotJson)
+* rmUpdatePlayer(playerJson)
 
 
 ## Developing
