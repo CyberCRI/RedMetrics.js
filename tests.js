@@ -91,6 +91,20 @@ describe("RedMetrics.js", function() {
                 done();
             });
         });
+
+        it("can post before connection", function(done) {
+            redmetrics.disconnect();
+
+            redmetrics.postEvent({
+                type: "start",
+                section: [1, 2]
+            }).then(function(result) {
+                expect(result.events).toBe(1);
+                done();
+            });
+
+            redmetrics.connect(config);
+        });
     }); 
 
     describe("can post snapshots:", function() {

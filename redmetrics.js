@@ -14,6 +14,7 @@
     var snapshotQueue = [];
     var postDeferred = null;
     var timerId = null;
+    var postInProgress = false;
 
     var redmetrics = {
         connected: false,
@@ -24,9 +25,15 @@
         return new Date().toISOString();
     }
 
+    function createDeferred() {
+        postDeferred = Q.defer();
+    }
+
     function sendData() {
         if(eventQueue.length == 0 && snapshotQueue == 0) return;
+        if(postInProgress) return;
 
+        postInProgress = true;
         Q.spread([sendEvents(), sendSnapshots()], function(eventCount, snaphotCount) {
             postDeferred.resolve({
                 events: eventCount,
@@ -35,8 +42,8 @@
         }).fail(function(error) {
             postDeferred.reject(new Error("Error posting data: " + error));
         }).fin(function() {
-            // Create new deferred
-            postDeferred = Q.defer();
+            postInProgress = false;
+            createDeferred();
         });
     }
 
@@ -54,10 +61,10 @@
            return result.data.length;
         }).fail(function(error) {
             throw new Error("Error posting events: " + error);
+        }).fin(function() {
+            // Clear queue
+            eventQueue = [];
         });
-
-        // Clear queue
-        eventQueue = [];
 
         return request;
     }
@@ -76,10 +83,10 @@
             return result.data.length;
         }).fail(function(error) {
             throw new Error("Error posting snapshots: " + error);
+        }).fin(function() {
+            // Clear queue
+            snapshotQueue = [];
         });
-
-        // Clear queue
-        snapshotQueue = [];
 
         return request;
     }
@@ -126,20 +133,23 @@
                 data: JSON.stringify(redmetrics.options.player),
                 contentType: "application/json"
             }).then(function(result) {
-                redmetrics.connected = true;
                 playerId = result.data.id;
-
-                postDeferred = Q.defer();
-
-                // Start sending events
-                timerId = window.setInterval(sendData, redmetrics.options.bufferingDelay)
             }).fail(function(error) {
                 redmetrics.connected = false;
                 throw new Error("Cannot create player: " + error);
             });
         }
 
-        return getStatus().then(checkGameVersion).then(createPlayer);
+        function completeConnection() {
+            return Q.fcall(function() { 
+                redmetrics.connected = true;
+
+                // Start sending events
+                timerId = window.setInterval(sendData, redmetrics.options.bufferingDelay);
+            });
+        }
+
+        return getStatus().then(checkGameVersion).then(createPlayer).then(completeConnection);
     };
 
     redmetrics.disconnect = function() {
@@ -158,7 +168,7 @@
 
         if(postDeferred) {
             postDeferred.reject(new Error("RedMetrics was disconnected by user"));
-            postDeferred = null;
+            createDeferred();
         }
 
         // Return empty promise
@@ -166,8 +176,6 @@
     };
 
     redmetrics.postEvent = function(event) {
-        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
-
         if(event.section && _.isArray(event.section)) {
             event.section = event.section.join(".");
         }
@@ -182,8 +190,6 @@
     };
 
     redmetrics.postSnapshot = function(snapshot) {
-        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
-
         if(snapshot.section && _.isArray(snapshot.section)) {
             snapshot.section = snapshot.section.join(".");
         }
@@ -213,144 +219,7 @@
         });
     }
 
+    createDeferred();
+
     return redmetrics;
 }));
-
-
-/*
-    SNAPSHOT_FRAME_DELAY = 60 # Only record a snapshot every 60 frames
-
-    eventQueue = []
-    snapshotQueue = []
-    timerId = null
-    playerId = null
-    playerInfo = {} # Current state of player 
-    snapshotFrameCounter = 0 ## Number of frames since last snapshot
-
-    configIsValid = -> options.metrics and options.metrics.gameVersionId and options.metrics.host 
-
-    sendResults = ->
-        sendEvents()
-        sendSnapshots()
-
-    sendEvents = ->
-        if eventQueue.length is 0 then return 
-
-        # Send AJAX request
-        jqXhr = $.ajax 
-        url: options.metrics.host + "/v1/event/" 
-        type: "POST"
-        data: JSON.stringify(eventQueue)
-        processData: false
-        contentType: "application/json"
-
-        # Clear queue
-        eventQueue = []
-
-    sendSnapshots = ->
-        if snapshotQueue.length is 0 then return 
-
-        # Send AJAX request
-        jqXhr = $.ajax 
-        url: options.metrics.host + "/v1/snapshot/" 
-        type: "POST"
-        data: JSON.stringify(snapshotQueue)
-        processData: false
-        contentType: "application/json"
-
-        # Clear queue
-        snapshotQueue = []
-
-    io =
-        enterPlaySequence: ->
-        if not configIsValid() then return 
-
-        # Reset snapshot counter so that it will be sent on the first frame
-        snapshotFrameCounter = SNAPSHOT_FRAME_DELAY
-
-        # Create player
-        jqXhr = $.ajax 
-            url: options.metrics.host + "/v1/player/"
-            type: "POST"
-            data: "{}"
-            processData: false
-            contentType: "application/json"
-        jqXhr.done (data, textStatus) -> 
-            playerId = data.id
-            # Start sending events
-            timerId = window.setInterval(sendResults, 5000)
-        jqXhr.fail (__, textStatus, errorThrown) -> 
-            throw new Error("Cannot create player: #{errorThrown}")
- 
-        leavePlaySequence: -> 
-        # If metrics session was not created then ignore
-        if not playerId then return
-
-        # Send last data before stopping 
-        sendResults()
-
-        # Stop sending events
-        window.clearInterval(timerId)
-        playerId = null
-
-        provideData: -> 
-        global: 
-            events: []
-            player: playerInfo
-
-        establishData: (ioData, additionalData) -> 
-        # Only send data in play sequence
-        if not playerId then return 
-
-        # Contains updated playerInfo if necessary
-        newPlayerInfo = null
-        userTime = new Date().toISOString()
-
-        # Expecting a format like { player: {}, events: [ type: "", section: [], coordinates: [], customData: }, ... ] }
-        for circuitId in _.pluck(options.circuitMetas, "id") 
-            # Collate all data into the events queue (disregard individual circuits)
-
-            # Set game version and player IDs on events
-            for event in ioData[circuitId].events
-            # If event section is array, change it to a dot.separated string
-            if event.section and _.isArray(event.section)
-                event.section = event.section.join(".")
-
-            eventQueue.push _.extend event, 
-                gameVersion: options.metrics.gameVersionId
-                player: playerId
-                userTime: userTime
-
-            if snapshotFrameCounter++ >= SNAPSHOT_FRAME_DELAY
-            # Reset snapshot counter
-            snapshotFrameCounter = 0
-
-            # Send input memory and input IO data as snapshots
-            snapshotQueue.push 
-                gameVersion: options.metrics.gameVersionId
-                player: playerId
-                userTime: userTime
-                customData:
-                inputIo: additionalData.inputIoData
-                memory: additionalData.memoryData
-
-            # Update player info
-            if not _.isEqual(ioData[circuitId].player, playerInfo) 
-            newPlayerInfo = ioData[circuitId].player
-
-        # Update player info if necessary
-        if newPlayerInfo
-            jqXhr = $.ajax 
-            url: options.metrics.host + "/v1/player/" + playerId
-            type: "PUT"
-            data: JSON.stringify(newPlayerInfo)
-            processData: false
-            contentType: "application/json"
-            playerInfo = newPlayerInfo
-
-        return null # avoid accumulating results
-
-        destroy: -> # NOP
-
-    return io
-*/
