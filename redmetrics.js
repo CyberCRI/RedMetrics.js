@@ -12,7 +12,7 @@
     var playerId = null;
     var eventQueue = [];
     var snapshotQueue = [];
-    var postDeferred = null;
+    var postDeferred = Q.defer();;
     var timerId = null;
 
     var redmetrics = {
@@ -45,6 +45,14 @@
             return 0; 
         });
 
+        // Add data related to current connection
+        for(var i = 0; i < eventQueue.length; i++) {
+            _.extend(eventQueue[i], {
+                gameVersion: redmetrics.options.gameVersionId,
+                player: playerId,
+            });
+        }
+
         var request = Q.xhr({
             url: redmetrics.options.baseUrl + "/v1/event/",
             method: "POST",
@@ -66,6 +74,14 @@
         if(snapshotQueue.length == 0) return Q.fcall(function() { 
             return 0; 
         });
+
+        // Add data related to current connection
+        for(var i = 0; i < snapshotQueue.length; i++) {
+            _.extend(snapshotQueue[i], {
+                gameVersion: redmetrics.options.gameVersionId,
+                player: playerId,
+            });
+        }
 
         var request = Q.xhr({
             url: redmetrics.options.baseUrl + "/v1/snapshot/",
@@ -129,8 +145,6 @@
                 redmetrics.connected = true;
                 playerId = result.data.id;
 
-                postDeferred = Q.defer();
-
                 // Start sending events
                 timerId = window.setInterval(sendData, redmetrics.options.bufferingDelay)
             }).fail(function(error) {
@@ -159,7 +173,7 @@
 
         if(postDeferred) {
             postDeferred.reject(new Error("RedMetrics was disconnected by user"));
-            postDeferred = null;
+            postDeferred = Q.defer();
         }
 
         // Return empty promise
@@ -167,15 +181,11 @@
     };
 
     redmetrics.postEvent = function(event) {
-        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
-
         if(event.section && _.isArray(event.section)) {
             event.section = event.section.join(".");
         }
 
         eventQueue.push(_.extend(event, {
-            gameVersion: redmetrics.options.gameVersionId,
-            player: playerId,
             userTime: getUserTime()
         }));
 
@@ -183,15 +193,11 @@
     };
 
     redmetrics.postSnapshot = function(snapshot) {
-        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
-
         if(snapshot.section && _.isArray(snapshot.section)) {
             snapshot.section = snapshot.section.join(".");
         }
 
         snapshotQueue.push(_.extend(snapshot, {
-            gameVersion: redmetrics.options.gameVersionId,
-            player: playerId,
             userTime: getUserTime()
         }));
 
