@@ -19,7 +19,7 @@ describe("RedMetrics.js", function() {
         redmetrics.disconnect();
     });
 
-    describe("can connect", function() {
+    describe("connection", function() {
         it("can connect to a server", function() {
             expect(redmetrics.connected).toBe(true);
         });
@@ -67,8 +67,8 @@ describe("RedMetrics.js", function() {
         });
     });
 
-    describe("can post events:", function() {
-        it("just one", function(done) {
+    describe("event posting", function() {
+        it("posts one", function(done) {
             redmetrics.postEvent({
                 type: "start",
                 section: [1, 2]
@@ -78,7 +78,7 @@ describe("RedMetrics.js", function() {
             });
         });
 
-        it("multiple ones", function(done) {
+        it("posts multiple", function(done) {
             redmetrics.postEvent({
                 type: "start",
                 section: [1, 2]
@@ -92,7 +92,7 @@ describe("RedMetrics.js", function() {
             });
         });
 
-        it("before connecting", function(done) {
+        it("posts upon connecting", function(done) {
             redmetrics.disconnect();
 
             var postPromise = redmetrics.postEvent({
@@ -107,8 +107,8 @@ describe("RedMetrics.js", function() {
         });
     }); 
 
-    describe("can post snapshots:", function() {
-        it("just one", function(done) {
+    describe("snapshot posting", function() {
+        it("posts one", function(done) {
             redmetrics.postSnapshot({
                 customData: {
                     a: 1,
@@ -120,7 +120,7 @@ describe("RedMetrics.js", function() {
             });
         });
 
-        it("multiple ones", function(done) {
+        it("posts multiple", function(done) {
             redmetrics.postSnapshot({
                 customData: {
                     a: 1,
@@ -138,7 +138,7 @@ describe("RedMetrics.js", function() {
             });
         });
 
-        it("before connecting", function(done) {
+        it("posts upon connecting", function(done) {
             redmetrics.disconnect();
 
             redmetrics.postSnapshot({
