@@ -66,6 +66,10 @@ describe("RedMetrics.js", function() {
             };
             expect(connectAgain).toThrow();
         });
+
+        it("can get player ID", function() {
+            expect(redmetrics.playerId).not.toBe(null);
+        });
     });
 
     describe("event posting", function() {

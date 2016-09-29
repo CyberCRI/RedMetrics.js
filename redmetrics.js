@@ -9,7 +9,6 @@
         root.redmetrics = factory(root.b);
     }
 }(this, function (b) {
-    var playerId = null;
     var eventQueue = [];
     var snapshotQueue = [];
     var postDeferred = Q.defer();
@@ -18,6 +17,7 @@
 
     var redmetrics = {
         connected: false,
+        playerId: null,
         options: {}
     };
 
@@ -50,7 +50,7 @@
         for(var i = 0; i < eventQueue.length; i++) {
             _.extend(eventQueue[i], {
                 gameVersion: redmetrics.options.gameVersionId,
-                player: playerId,
+                player: redmetrics.playerId,
             });
         }
 
@@ -80,7 +80,7 @@
         for(var i = 0; i < snapshotQueue.length; i++) {
             _.extend(snapshotQueue[i], {
                 gameVersion: redmetrics.options.gameVersionId,
-                player: playerId,
+                player: redmetrics.playerId,
             });
         }
 
@@ -143,7 +143,7 @@
                 data: JSON.stringify(redmetrics.options.player),
                 contentType: "application/json"
             }).then(function(result) {
-                playerId = result.data.id;
+                redmetrics.playerId = result.data.id;
 
             }).fail(function(error) {
                 redmetrics.connected = false;
@@ -165,7 +165,7 @@
 
     redmetrics.disconnect = function() {
         function resetState() {
-            playerId = null;
+            redmetrics.playerId = null;
             connectionPromise = null;
 
             redmetrics.connected = false;
@@ -214,7 +214,7 @@
         if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
 
         return Q.xhr({
-            url: redmetrics.options.baseUrl + "/v1/player/" + playerId,
+            url: redmetrics.options.baseUrl + "/v1/player/" + redmetrics.playerId,
             method: "PUT",
             data: JSON.stringify(redmetrics.options.player),
             contentType: "application/json"
