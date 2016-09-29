@@ -12,8 +12,9 @@
     var playerId = null;
     var eventQueue = [];
     var snapshotQueue = [];
-    var postDeferred = Q.defer();;
+    var postDeferred = Q.defer();
     var timerId = null;
+    var connectionPromise = null;
 
     var redmetrics = {
         connected: false,
@@ -142,42 +143,47 @@
                 data: JSON.stringify(redmetrics.options.player),
                 contentType: "application/json"
             }).then(function(result) {
-                redmetrics.connected = true;
                 playerId = result.data.id;
 
-                // Start sending events
-                timerId = window.setInterval(sendData, redmetrics.options.bufferingDelay)
             }).fail(function(error) {
                 redmetrics.connected = false;
                 throw new Error("Cannot create player: " + error);
             });
         }
 
-        return getStatus().then(checkGameVersion).then(createPlayer);
+        function establishConnection() {
+            redmetrics.connected = true;
+
+            // Start sending events
+            timerId = window.setInterval(sendData, redmetrics.options.bufferingDelay)
+        }
+
+        // Hold on to connection promise so that other functions may listen to it
+        connectionPromise = getStatus().then(checkGameVersion).then(createPlayer).then(establishConnection);
+        return connectionPromise;
     };
 
     redmetrics.disconnect = function() {
-        // TODO: flush event and snapshot queues? Currently they are just emptied
+        function resetState() {
+            playerId = null;
+            connectionPromise = null;
 
-        // Reset state 
-        redmetrics.connected = false;
-        redmetrics.options = {};
-        playerId = null;
-        eventQueue = [];
-        snapshotQueue = [];
+            redmetrics.connected = false;
+            redmetrics.options = {};
+        }
 
+        // Stop timer
         if(timerId) {
             window.clearInterval(timerId);
             timerId = null;
         }
 
-        if(postDeferred) {
-            postDeferred.reject(new Error("RedMetrics was disconnected by user"));
-            postDeferred = Q.defer();
+        if(connectionPromise) {
+            // Flush any remaining data
+            return connectionPromise.then(sendData).fin(resetState);
+        } else {
+            return Q.fcall(resetState);
         }
-
-        // Return empty promise
-        return Q.fcall(function() {}); 
     };
 
     redmetrics.postEvent = function(event) {

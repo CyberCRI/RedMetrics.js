@@ -15,8 +15,8 @@ describe("RedMetrics.js", function() {
         });
     });
 
-    afterEach(function() {
-        redmetrics.disconnect();
+    afterEach(function(done) {
+        redmetrics.disconnect().fin(done);
     });
 
     describe("connection", function() {
@@ -24,38 +24,39 @@ describe("RedMetrics.js", function() {
             expect(redmetrics.connected).toBe(true);
         });
 
-        it("can't omit game version", function() {
-            redmetrics.disconnect();
-
-            var badOptions = _.omit(config, ["gameVersionId"]);
-            function connectWithBadOptions() {
-                redmetrics.connect(badOptions);
-            };
-            expect(connectWithBadOptions).toThrow();
+        it("can't omit game version", function(done) {
+            redmetrics.disconnect().then(function() {
+                var badOptions = _.omit(config, ["gameVersionId"]);
+                function connectWithBadOptions() {
+                    redmetrics.connect(badOptions);
+                };
+                expect(connectWithBadOptions).toThrow();
+                done();
+            });
         });
 
         it("can't connect to an inexistant server", function(done) {
-            redmetrics.disconnect();
-
-            var badOptions = {
-                host: "notredmetrics.io",
-                gameVersionId: config.gameVersionId
-            };
-            redmetrics.connect(badOptions).fin(function() {
-                expect(redmetrics.connected).toBe(false);
-                done();
+            redmetrics.disconnect().then(function() {
+                var badOptions = {
+                    host: "notredmetrics.io",
+                    gameVersionId: config.gameVersionId
+                };
+                redmetrics.connect(badOptions).fin(function() {
+                    expect(redmetrics.connected).toBe(false);
+                    done();
+                });
             });
         });
 
         it("can't use an inexistant game version", function(done) {
-            redmetrics.disconnect();
-
-            var badOptions = _.extend({}, config, {
-                gameVersionId: "1234"
-            });
-            redmetrics.connect(badOptions).fin(function() {
-                expect(redmetrics.connected).toBe(false);
-                done();
+            redmetrics.disconnect().then(function() {
+                var badOptions = _.extend({}, config, {
+                    gameVersionId: "1234"
+                });
+                redmetrics.connect(badOptions).fin(function() {
+                    expect(redmetrics.connected).toBe(false);
+                    done();
+                });                
             });
         });
 
@@ -92,18 +93,53 @@ describe("RedMetrics.js", function() {
             });
         });
 
-        it("posts upon connecting", function(done) {
-            redmetrics.disconnect();
+        it("posts after connecting", function(done) {
+            redmetrics.disconnect().then(function() { 
+                redmetrics.postEvent({
+                    type: "start",
+                    section: [1, 2]
+                }).then(function(result) {
+                    expect(result.events).toBe(1);
+                    done();
+                });
 
-            var postPromise = redmetrics.postEvent({
-                type: "start",
-                section: [1, 2]
-            }).then(function(result) {
-                expect(result.events).toBe(1);
-                done();
+                redmetrics.connect(config);
             });
+        });
 
-            redmetrics.connect(config);
+        it("posts while connecting", function(done) {
+            redmetrics.disconnect().then(function() { 
+                redmetrics.connect(config);
+
+                // Don't wait until connected   
+                redmetrics.postEvent({
+                    type: "start",
+                    section: [1, 2]
+                }).then(function(result) {
+                    expect(result.events).toBe(1);
+                    done();
+                });
+            });
+        });
+
+        it("posts after disconnecting", function(done) {
+            redmetrics.disconnect().then(function() {
+                // Reconnect with a long buffering delay so that posts don't happen immediately
+                var delayedConfig = _.extend({}, config, {bufferingDelay: 999999999 });
+                return redmetrics.connect(delayedConfig);
+            }).then(function() {
+                redmetrics.postEvent({
+                    type: "start",
+                    section: [1, 2]
+                }).then(function(result) {
+                    expect(redmetrics.connected).toBe(false);
+
+                    expect(result.events).toBe(1);
+                    done();
+                });
+
+                redmetrics.disconnect();
+            });
         });
     }); 
 
@@ -138,36 +174,75 @@ describe("RedMetrics.js", function() {
             });
         });
 
-        it("posts upon connecting", function(done) {
-            redmetrics.disconnect();
+        it("posts after connecting", function(done) {
+            redmetrics.disconnect().then(function() {
+                redmetrics.postSnapshot({
+                    customData: {
+                        a: 1,
+                        b: 2
+                    }
+                }).then(function(result) {
+                    expect(result.snapshots).toBe(1);
+                    done();
+                });
 
-            redmetrics.postSnapshot({
-                customData: {
-                    a: 1,
-                    b: 2
-                }
-            }).then(function(result) {
-                expect(result.snapshots).toBe(1);
-                done();
+                redmetrics.connect(config);
             });
+        });
 
-            redmetrics.connect(config);
+        it("posts while connecting", function(done) {
+            redmetrics.disconnect().then(function() { 
+                redmetrics.connect(config);
+
+                // Don't wait until connected   
+                redmetrics.postSnapshot({
+                    customData: {
+                        a: 1,
+                        b: 2
+                    }
+                }).then(function(result) {
+                    expect(result.snapshots).toBe(1);
+                    done();
+                });
+            });
+        });
+
+        it("posts after disconnecting", function(done) {
+            redmetrics.disconnect().then(function() {
+                // Reconnect with a long buffering delay so that posts don't happen immediately
+                var delayedConfig = _.extend({}, config, {bufferingDelay: 999999999 });
+                return redmetrics.connect(delayedConfig);
+            }).then(function() {
+                redmetrics.postSnapshot({
+                    customData: {
+                        a: 1,
+                        b: 2
+                    }
+                }).then(function(result) {
+                    expect(redmetrics.connected).toBe(false);
+
+                    expect(result.snapshots).toBe(1);
+                    done();
+                });
+
+                redmetrics.disconnect();
+            });
         });
     }); 
 
     describe("player", function() {
         it("can be provided at connection time", function(done) {
-            redmetrics.disconnect();
-
-            var connectionOptions = _.extend({}, config, {
-                player: {
-                    externalId: "1234"
-                }
-            });
-            redmetrics.connect(connectionOptions).fin(function() {
-                expect(redmetrics.connected).toBe(true);
-                expect(redmetrics.options.player.externalId).toBe("1234");
-                done();
+            redmetrics.disconnect().then(function() {
+                var connectionOptions = _.extend({}, config, {
+                    player: {
+                        externalId: "1234"
+                    }
+                });
+                redmetrics.connect(connectionOptions).fin(function() {
+                    expect(redmetrics.connected).toBe(true);
+                    expect(redmetrics.options.player.externalId).toBe("1234");
+                    done();
+                });
             });
         });
 
