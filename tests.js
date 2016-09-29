@@ -91,6 +91,20 @@ describe("RedMetrics.js", function() {
                 done();
             });
         });
+
+        it("before connecting", function(done) {
+            redmetrics.disconnect();
+
+            var postPromise = redmetrics.postEvent({
+                type: "start",
+                section: [1, 2]
+            }).then(function(result) {
+                expect(result.events).toBe(1);
+                done();
+            });
+
+            redmetrics.connect(config);
+        });
     }); 
 
     describe("can post snapshots:", function() {
@@ -122,6 +136,22 @@ describe("RedMetrics.js", function() {
                 expect(result.snapshots).toBe(2);
                 done();
             });
+        });
+
+        it("before connecting", function(done) {
+            redmetrics.disconnect();
+
+            redmetrics.postSnapshot({
+                customData: {
+                    a: 1,
+                    b: 2
+                }
+            }).then(function(result) {
+                expect(result.snapshots).toBe(1);
+                done();
+            });
+
+            redmetrics.connect(config);
         });
     }); 
 
