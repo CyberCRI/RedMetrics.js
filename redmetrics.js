@@ -18,6 +18,7 @@
     var redmetrics = {
         connected: false,
         playerId: null,
+        playerInfo: {},
         options: {}
     };
 
@@ -122,6 +123,11 @@
             throw new Error("Missing options.gameVersionId");
         }
 
+        _.extend(redmetrics.options.player, redmetrics.playerInfo);
+
+        // The player info may change during the connection process, so hold onto it
+        var oldPlayerInfo = redmetrics.playerInfo;
+
         function getStatus() {
             return Q.xhr.get(redmetrics.options.baseUrl + "/status").fail(function(error) {
                 redmetrics.connected = false;
@@ -144,7 +150,6 @@
                 contentType: "application/json"
             }).then(function(result) {
                 redmetrics.playerId = result.data.id;
-
             }).fail(function(error) {
                 redmetrics.connected = false;
                 throw new Error("Cannot create player: " + error);
@@ -155,8 +160,11 @@
             redmetrics.connected = true;
 
             // Start sending events
-            timerId = window.setInterval(sendData, redmetrics.options.bufferingDelay)
-        }
+            timerId = window.setInterval(sendData, redmetrics.options.bufferingDelay);
+
+            // If the playerInfo has been modified during the connection process, call updatePlayer()
+            if(oldPlayerInfo != redmetrics.playerInfo) return redmetrics.updatePlayer(redmetrics.playerInfo);
+        }   
 
         // Hold on to connection promise so that other functions may listen to it
         connectionPromise = getStatus().then(checkGameVersion).then(createPlayer).then(establishConnection);
@@ -170,6 +178,7 @@
 
             redmetrics.connected = false;
             redmetrics.options = {};
+            redmetrics.playerInfo = {};
         }
 
         // Stop timer
@@ -210,17 +219,20 @@
         return postDeferred.promise;
     };
 
-    redmetrics.updatePlayer = function(player) {
-        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
+    redmetrics.updatePlayer = function(playerInfo) {
+        redmetrics.playerInfo = playerInfo;
 
+        // If we're not yet connected, return immediately
+        if(!redmetrics.connected) return Q(redmetrics.playerInfo); 
+
+        // Otherwise update on the server
         return Q.xhr({
             url: redmetrics.options.baseUrl + "/v1/player/" + redmetrics.playerId,
             method: "PUT",
-            data: JSON.stringify(redmetrics.options.player),
+            data: JSON.stringify(redmetrics.playerInfo),
             contentType: "application/json"
         }).then(function() {
-            redmetrics.options.player = player;
-            return redmetrics.options.player;
+            return redmetrics.playerInfo;
         }).fail(function(error) {
             throw new Error("Cannot update player:", error)
         });

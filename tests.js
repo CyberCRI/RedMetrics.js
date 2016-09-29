@@ -7,7 +7,6 @@ describe("RedMetrics.js", function() {
         bufferingDelay: 0
     });
 
-
     beforeEach(function(done) {
         redmetrics.connect(config).fin(function() {
             expect(redmetrics.connected).toBe(true);
@@ -65,10 +64,6 @@ describe("RedMetrics.js", function() {
                 redmetrics.connect(config);
             };
             expect(connectAgain).toThrow();
-        });
-
-        it("can get player ID", function() {
-            expect(redmetrics.playerId).not.toBe(null);
         });
     });
 
@@ -235,6 +230,10 @@ describe("RedMetrics.js", function() {
     }); 
 
     describe("player", function() {
+        it("can get player ID", function() {
+            expect(redmetrics.playerId).not.toBe(null);
+        });
+
         it("can be provided at connection time", function(done) {
             redmetrics.disconnect().then(function() {
                 var connectionOptions = _.extend({}, config, {
@@ -250,12 +249,42 @@ describe("RedMetrics.js", function() {
             });
         });
 
-        it("can update player", function(done) {
+        it("can update player after connection", function(done) {
             redmetrics.updatePlayer({
                 externalId: "azer"
             }).fin(function() {
-                expect(redmetrics.options.player.externalId).toBe("azer");
+                expect(redmetrics.playerInfo.externalId).toBe("azer");
                 done();
+            });
+        });
+
+        it("can update player before connection", function(done) {
+            redmetrics.disconnect().then(function() {
+                return redmetrics.updatePlayer({
+                    externalId: "azer"
+                });
+            }).then(function() {
+                expect(redmetrics.playerInfo.externalId).toBe("azer");
+
+                return redmetrics.connect(config);
+            }).then(function() {
+                 expect(redmetrics.playerInfo.externalId).toBe("azer");
+                 done();
+            });
+        });
+
+        it("can update player during connection", function(done) {
+            redmetrics.disconnect().then(function() {
+                // Start connecting ...
+                redmetrics.connect(config).then(function() {
+                    expect(redmetrics.playerInfo.externalId).toBe("azer");
+                    done();
+                });
+
+                // ... and update the player during the process
+                redmetrics.updatePlayer({
+                    externalId: "azer"
+                });
             });
         });
     });
