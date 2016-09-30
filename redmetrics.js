@@ -27,7 +27,7 @@
     }
 
     function sendData() {
-        if(eventQueue.length == 0 && snapshotQueue == 0) return;
+        if(eventQueue.length == 0 && snapshotQueue.length == 0) return;
 
         Q.spread([sendEvents(), sendSnapshots()], function(eventCount, snaphotCount) {
             postDeferred.resolve({
@@ -225,11 +225,18 @@
         // If we're not yet connected, return immediately
         if(!redmetrics.connected) return Q(redmetrics.playerInfo); 
 
+        // Currently RedMetrics requires customData to be encoded as a string
+        if(_.has(playerInfo, "customData")) {
+            // Clone object to avoid modifying redmetrics.playerInfo
+            playerInfo = _.clone(playerInfo);
+            playerInfo.customData = JSON.stringify(playerInfo.customData);
+        }
+
         // Otherwise update on the server
         return Q.xhr({
             url: redmetrics.options.baseUrl + "/v1/player/" + redmetrics.playerId,
             method: "PUT",
-            data: JSON.stringify(redmetrics.playerInfo),
+            data: JSON.stringify(playerInfo),
             contentType: "application/json"
         }).then(function() {
             return redmetrics.playerInfo;

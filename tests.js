@@ -241,7 +241,7 @@ describe("RedMetrics.js", function() {
                         externalId: "1234"
                     }
                 });
-                redmetrics.connect(connectionOptions).fin(function() {
+                redmetrics.connect(connectionOptions).then(function() {
                     expect(redmetrics.connected).toBe(true);
                     expect(redmetrics.options.player.externalId).toBe("1234");
                     done();
@@ -249,10 +249,21 @@ describe("RedMetrics.js", function() {
             });
         });
 
+        it("can provide customData", function(done) {
+            redmetrics.updatePlayer({
+                externalId: "azer",
+                customData: { "a": 1, "b": 2 }
+            }).then(function() {
+                expect(redmetrics.playerInfo.externalId).toBe("azer");
+                expect(_.isEqual(redmetrics.playerInfo.customData, { "a": 1, "b": 2 })).toBe(true);
+                done();
+            });
+        });
+
         it("can update player after connection", function(done) {
             redmetrics.updatePlayer({
                 externalId: "azer"
-            }).fin(function() {
+            }).then(function() {
                 expect(redmetrics.playerInfo.externalId).toBe("azer");
                 done();
             });
