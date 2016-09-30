@@ -9,14 +9,16 @@
         root.redmetrics = factory(root.b);
     }
 }(this, function (b) {
-    var playerId = null;
     var eventQueue = [];
     var snapshotQueue = [];
-    var postDeferred = null;
+    var postDeferred = Q.defer();
     var timerId = null;
+    var connectionPromise = null;
 
     var redmetrics = {
         connected: false,
+        playerId: null,
+        playerInfo: {},
         options: {}
     };
 
@@ -25,7 +27,7 @@
     }
 
     function sendData() {
-        if(eventQueue.length == 0 && snapshotQueue == 0) return;
+        if(eventQueue.length == 0 && snapshotQueue.length == 0) return;
 
         Q.spread([sendEvents(), sendSnapshots()], function(eventCount, snaphotCount) {
             postDeferred.resolve({
@@ -44,6 +46,14 @@
         if(eventQueue.length == 0) return Q.fcall(function() { 
             return 0; 
         });
+
+        // Add data related to current connection
+        for(var i = 0; i < eventQueue.length; i++) {
+            _.extend(eventQueue[i], {
+                gameVersion: redmetrics.options.gameVersionId,
+                player: redmetrics.playerId,
+            });
+        }
 
         var request = Q.xhr({
             url: redmetrics.options.baseUrl + "/v1/event/",
@@ -66,6 +76,14 @@
         if(snapshotQueue.length == 0) return Q.fcall(function() { 
             return 0; 
         });
+
+        // Add data related to current connection
+        for(var i = 0; i < snapshotQueue.length; i++) {
+            _.extend(snapshotQueue[i], {
+                gameVersion: redmetrics.options.gameVersionId,
+                player: redmetrics.playerId,
+            });
+        }
 
         var request = Q.xhr({
             url: redmetrics.options.baseUrl + "/v1/snapshot/",
@@ -105,6 +123,11 @@
             throw new Error("Missing options.gameVersionId");
         }
 
+        _.extend(redmetrics.options.player, redmetrics.playerInfo);
+
+        // The player info may change during the connection process, so hold onto it
+        var oldPlayerInfo = redmetrics.playerInfo;
+
         function getStatus() {
             return Q.xhr.get(redmetrics.options.baseUrl + "/status").fail(function(error) {
                 redmetrics.connected = false;
@@ -126,55 +149,58 @@
                 data: JSON.stringify(redmetrics.options.player),
                 contentType: "application/json"
             }).then(function(result) {
-                redmetrics.connected = true;
-                playerId = result.data.id;
-
-                postDeferred = Q.defer();
-
-                // Start sending events
-                timerId = window.setInterval(sendData, redmetrics.options.bufferingDelay)
+                redmetrics.playerId = result.data.id;
             }).fail(function(error) {
                 redmetrics.connected = false;
                 throw new Error("Cannot create player: " + error);
             });
         }
 
-        return getStatus().then(checkGameVersion).then(createPlayer);
+        function establishConnection() {
+            redmetrics.connected = true;
+
+            // Start sending events
+            timerId = window.setInterval(sendData, redmetrics.options.bufferingDelay);
+
+            // If the playerInfo has been modified during the connection process, call updatePlayer()
+            if(oldPlayerInfo != redmetrics.playerInfo) return redmetrics.updatePlayer(redmetrics.playerInfo);
+        }   
+
+        // Hold on to connection promise so that other functions may listen to it
+        connectionPromise = getStatus().then(checkGameVersion).then(createPlayer).then(establishConnection);
+        return connectionPromise;
     };
 
     redmetrics.disconnect = function() {
-        // TODO: flush event queue ?
+        function resetState() {
+            redmetrics.playerId = null;
+            connectionPromise = null;
 
-        // Reset state 
-        redmetrics.connected = false;
-        redmetrics.options = {};
-        playerId = null;
-        eventQueue = [];
+            redmetrics.connected = false;
+            redmetrics.options = {};
+            redmetrics.playerInfo = {};
+        }
 
+        // Stop timer
         if(timerId) {
             window.clearInterval(timerId);
             timerId = null;
         }
 
-        if(postDeferred) {
-            postDeferred.reject(new Error("RedMetrics was disconnected by user"));
-            postDeferred = null;
+        if(connectionPromise) {
+            // Flush any remaining data
+            return connectionPromise.then(sendData).fin(resetState);
+        } else {
+            return Q.fcall(resetState);
         }
-
-        // Return empty promise
-        return Q.fcall(function() {}); 
     };
 
     redmetrics.postEvent = function(event) {
-        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
-
         if(event.section && _.isArray(event.section)) {
             event.section = event.section.join(".");
         }
 
         eventQueue.push(_.extend(event, {
-            gameVersion: redmetrics.options.gameVersionId,
-            player: playerId,
             userTime: getUserTime()
         }));
 
@@ -182,32 +208,38 @@
     };
 
     redmetrics.postSnapshot = function(snapshot) {
-        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
-
         if(snapshot.section && _.isArray(snapshot.section)) {
             snapshot.section = snapshot.section.join(".");
         }
 
         snapshotQueue.push(_.extend(snapshot, {
-            gameVersion: redmetrics.options.gameVersionId,
-            player: playerId,
             userTime: getUserTime()
         }));
 
         return postDeferred.promise;
     };
 
-    redmetrics.updatePlayer = function(player) {
-        if(!redmetrics.connected) throw new Error("RedMetrics is not connected");
+    redmetrics.updatePlayer = function(playerInfo) {
+        redmetrics.playerInfo = playerInfo;
 
+        // If we're not yet connected, return immediately
+        if(!redmetrics.connected) return Q(redmetrics.playerInfo); 
+
+        // Currently RedMetrics requires customData to be encoded as a string
+        if(_.has(playerInfo, "customData")) {
+            // Clone object to avoid modifying redmetrics.playerInfo
+            playerInfo = _.clone(playerInfo);
+            playerInfo.customData = JSON.stringify(playerInfo.customData);
+        }
+
+        // Otherwise update on the server
         return Q.xhr({
-            url: redmetrics.options.baseUrl + "/v1/player/" + playerId,
+            url: redmetrics.options.baseUrl + "/v1/player/" + redmetrics.playerId,
             method: "PUT",
-            data: JSON.stringify(redmetrics.options.player),
+            data: JSON.stringify(playerInfo),
             contentType: "application/json"
         }).then(function() {
-            redmetrics.options.player = player;
-            return redmetrics.options.player;
+            return redmetrics.playerInfo;
         }).fail(function(error) {
             throw new Error("Cannot update player:", error)
         });
@@ -216,141 +248,3 @@
     return redmetrics;
 }));
 
-
-/*
-    SNAPSHOT_FRAME_DELAY = 60 # Only record a snapshot every 60 frames
-
-    eventQueue = []
-    snapshotQueue = []
-    timerId = null
-    playerId = null
-    playerInfo = {} # Current state of player 
-    snapshotFrameCounter = 0 ## Number of frames since last snapshot
-
-    configIsValid = -> options.metrics and options.metrics.gameVersionId and options.metrics.host 
-
-    sendResults = ->
-        sendEvents()
-        sendSnapshots()
-
-    sendEvents = ->
-        if eventQueue.length is 0 then return 
-
-        # Send AJAX request
-        jqXhr = $.ajax 
-        url: options.metrics.host + "/v1/event/" 
-        type: "POST"
-        data: JSON.stringify(eventQueue)
-        processData: false
-        contentType: "application/json"
-
-        # Clear queue
-        eventQueue = []
-
-    sendSnapshots = ->
-        if snapshotQueue.length is 0 then return 
-
-        # Send AJAX request
-        jqXhr = $.ajax 
-        url: options.metrics.host + "/v1/snapshot/" 
-        type: "POST"
-        data: JSON.stringify(snapshotQueue)
-        processData: false
-        contentType: "application/json"
-
-        # Clear queue
-        snapshotQueue = []
-
-    io =
-        enterPlaySequence: ->
-        if not configIsValid() then return 
-
-        # Reset snapshot counter so that it will be sent on the first frame
-        snapshotFrameCounter = SNAPSHOT_FRAME_DELAY
-
-        # Create player
-        jqXhr = $.ajax 
-            url: options.metrics.host + "/v1/player/"
-            type: "POST"
-            data: "{}"
-            processData: false
-            contentType: "application/json"
-        jqXhr.done (data, textStatus) -> 
-            playerId = data.id
-            # Start sending events
-            timerId = window.setInterval(sendResults, 5000)
-        jqXhr.fail (__, textStatus, errorThrown) -> 
-            throw new Error("Cannot create player: #{errorThrown}")
- 
-        leavePlaySequence: -> 
-        # If metrics session was not created then ignore
-        if not playerId then return
-
-        # Send last data before stopping 
-        sendResults()
-
-        # Stop sending events
-        window.clearInterval(timerId)
-        playerId = null
-
-        provideData: -> 
-        global: 
-            events: []
-            player: playerInfo
-
-        establishData: (ioData, additionalData) -> 
-        # Only send data in play sequence
-        if not playerId then return 
-
-        # Contains updated playerInfo if necessary
-        newPlayerInfo = null
-        userTime = new Date().toISOString()
-
-        # Expecting a format like { player: {}, events: [ type: "", section: [], coordinates: [], customData: }, ... ] }
-        for circuitId in _.pluck(options.circuitMetas, "id") 
-            # Collate all data into the events queue (disregard individual circuits)
-
-            # Set game version and player IDs on events
-            for event in ioData[circuitId].events
-            # If event section is array, change it to a dot.separated string
-            if event.section and _.isArray(event.section)
-                event.section = event.section.join(".")
-
-            eventQueue.push _.extend event, 
-                gameVersion: options.metrics.gameVersionId
-                player: playerId
-                userTime: userTime
-
-            if snapshotFrameCounter++ >= SNAPSHOT_FRAME_DELAY
-            # Reset snapshot counter
-            snapshotFrameCounter = 0
-
-            # Send input memory and input IO data as snapshots
-            snapshotQueue.push 
-                gameVersion: options.metrics.gameVersionId
-                player: playerId
-                userTime: userTime
-                customData:
-                inputIo: additionalData.inputIoData
-                memory: additionalData.memoryData
-
-            # Update player info
-            if not _.isEqual(ioData[circuitId].player, playerInfo) 
-            newPlayerInfo = ioData[circuitId].player
-
-        # Update player info if necessary
-        if newPlayerInfo
-            jqXhr = $.ajax 
-            url: options.metrics.host + "/v1/player/" + playerId
-            type: "PUT"
-            data: JSON.stringify(newPlayerInfo)
-            processData: false
-            contentType: "application/json"
-            playerInfo = newPlayerInfo
-
-        return null # avoid accumulating results
-
-        destroy: -> # NOP
-
-    return io
-*/
