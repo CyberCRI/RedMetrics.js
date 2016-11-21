@@ -9,41 +9,16 @@
         root.redmetrics = factory(root.b);
     }
 }(this, function (b) {
+    var redmetrics = {};
 
-    // TODO: delete this
-    // if it was by itself
-    //     connection = redmetrics.connectToRead({ server, gameVersion })
-    //     connection.queryEvents({ pageNumber (opt), type, ... }).then(( cursor ))
-    //         cursor.data is data
-    //         cursor.pageNumber
-    //         cursor.pageCount
-    //         cursor.hasNextPage()
-    //         cursor.nextPage() = redmetrics.queryEvents({ ++pageNumber })
-    //     connection.disconnect() // no op
-
-    //     // non-stateful API
-    //     redmetrics.executeQuery({ all options })
-
-    // how to combine it?
-    //     connection = redmetrics.connectToWrite({ server, gameVersion })
-    //     connection.postEvent()
-    //     connection.postSnapshot()
-    //     connection.disconnect()
-
-    //     // non-stateful API
-    //     redmetrics.createPlayer({ })
-    //     redmetrics.updatePlayer({ })
-    //     redmetrics.createEvent({ })
-    //     redmetrics.createSnapshot({ })
-
-    function prepareWriteConnection(connectionOptions) {
+    redmetrics.prepareWriteConnection = function(connectionOptions) {
         var eventQueue = [];
         var snapshotQueue = [];
         var postDeferred = Q.defer();
         var timerId = null;
         var connectionPromise = null;
 
-        // This data structure will be returned from the connectToWrite() function
+        // This data structure will be returned from the prepareWriteConnection() function
         var writeConnection = {
             connected: false,
             playerId: null,
@@ -274,8 +249,133 @@
         return writeConnection;
     }
 
-    return { 
-        prepareWriteConnection: prepareWriteConnection
-    };
+    function formatDateAsIso(dateString) {
+        if(!dateString) return null;
+
+        // Read as local date but convert to UTC time
+        var localDate = new Date(dateString);
+        var utcDate = Date.UTC(localDate.getFullYear(), localDate.getMonth(), 
+            localDate.getDate(), localDate.getHours(), localDate.getMinutes(), 
+            localDate.getSeconds(), localDate.getMilliseconds());
+        return new Date(utcDate).toISOString();
+    }
+
+    function readDateAsIso(dateString) {
+        if(!dateString) return null;
+
+        // Read as utc date but pretend it is a local date
+        var localDate = new Date(dateString);
+        return new Date(localDate.getUTCFullYear(), localDate.getUTCMonth(), 
+            localDate.getUTCDate(), localDate.getUTCHours(), localDate.getUTCMinutes(), 
+            localDate.getUTCSeconds(), localDate.getUTCMilliseconds());
+    }
+
+    /*  The _connectionOptions_ object contains:
+            * Either _baseUrl_ (like "https://api.redmetrics.api" or the following 
+                *   protocol
+                *   host
+                *   port
+            * bufferingDelay in milliseconds (default 5000)
+            * gameVersionId
+        The _searchFilter_ object contains:
+            * game
+            * gameVersion
+            * playerId
+            * entityType ("event" or "snapshot")
+            * type
+            * section
+            * before
+            * after
+            * beforeUserTime
+            * afterUserTime
+            * page
+            * perPage
+    */
+    redmetrics.executeQuery = function(connectionOptions, searchFilter) {
+        _.defaults(connectionOptions, {
+            protocol: "https",
+            host: "api.writeConnection.io",
+            port: 443,
+            bufferingDelay: 5000
+        });
+
+        // Build base URL
+        if(!connectionOptions.baseUrl) {
+            connectionOptions.baseUrl = connectionOptions.protocol + "://" + connectionOptions.host + ":" + connectionOptions.port;
+        }
+
+        if(!searchFilter.entityType) {
+            throw new Error("Missting entityType");
+        }
+
+        // Copy over searchFilter
+        var newSearchFilter = _.clone(searchFilter);
+
+        // Convert date search filters 
+        var dateFilterParams = ["after", "before", "beforeUserTime", "afterUserTime"];
+        _.each(dateFilterParams, function(param) {
+            if(_.has(searchFilter, param)) {
+                newSearchFilter[param] = formatDateAsIso(searchFilter[param]);
+            }
+        });
+
+        // Make request
+        return Q.xhr.get(connectionOptions.baseUrl + "/v1/" + newSearchFilter.entityType, { params: newSearchFilter })
+        .then(function(response) {
+            var headers = response.headers();
+            var result = {
+                // Extract page info from headers
+                pageNumber: parseInt(headers["x-page-number"]),
+                pageCount: parseInt(headers["x-page-count"]),
+                perPageCount: parseInt(headers["x-per-page-count"]),
+                totalCount: parseInt(headers["x-total-count"]),
+
+                // Copy over original options
+                connectionOptions: connectionOptions,
+                searchFilter: searchFilter,
+
+                // Convert times in the data
+                data: _.each(response.data, function(entity) {
+                    entity.serverTime = readDateAsIso(entity.serverTime);
+                    if(entity.userTime) {
+                        entity.userTime = readDateAsIso(entity.userTime);
+                    }
+                }),
+
+                // Add helper alias functions
+                hasNextPage: function() { return redmetrics.hasNextPage(result); },
+                hasPreviousPage: function() { return redmetrics.hasPreviousPage(result); },
+                nextPage: function() { return redmetrics.nextPage(result); },
+                previousPage: function() { return redmetrics.previousPage(result); },
+            };
+            return result;
+        });
+    }
+
+    redmetrics.hasNextPage = function(queryResult) {
+        return queryResult.pageNumber < queryResult.pageCount;
+    }
+
+    redmetrics.hasPreviousPage = function(queryResult) {
+        return queryResult.pageNumber > 1;
+    }
+
+    redmetrics.nextPage = function(queryResult) {
+        var newSearchFilter = _.extend({}, queryResult.searchFilter, {
+            page: queryResult.pageNumber + 1
+        });
+        return redmetrics.executeQuery(queryResult.connectionOptions, newSearchFilter);
+    }
+
+    redmetrics.previousPage = function(queryResult) {
+        if(!redmetrics.hasPreviousPage(queryResult)) throw new Error("There is no previous page");
+
+        var newSearchFilter = _.extend({}, queryResult.searchFilter, {
+            page: queryResult.pageNumber - 1
+        });
+        return redmetrics.executeQuery(queryResult.connectionOptions, newSearchFilter);
+    }
+
+    return redmetrics;
 }));
 
