@@ -317,10 +317,10 @@ describe("RedMetrics.js", function() {
 
     describe("reading", function() {
         it("can list events", function(done) {
-            redmetrics.executeQuery(RedMetricsConfig, { 
+            redmetrics.executeQuery({ 
                 gameVersion: RedMetricsConfig.gameVersionId,
                 entityType: "event" 
-            }).then(function(result) {
+            }, RedMetricsConfig).then(function(result) {
                 expect(result.pageNumber).toBe(1);
                 expect(result.pageCount).toBeGreaterThan(0);
                 expect(result.perPageCount).toBeGreaterThan(0);
@@ -334,10 +334,10 @@ describe("RedMetrics.js", function() {
         });
 
         it("can list snapshots", function(done) {
-            redmetrics.executeQuery(RedMetricsConfig, { 
+            redmetrics.executeQuery({ 
                 gameVersion: RedMetricsConfig.gameVersionId,
                 entityType: "snapshot" 
-            }).then(function(result) {
+            }, RedMetricsConfig).then(function(result) {
                 expect(result.pageNumber).toBe(1);
                 expect(result.pageCount).toBeGreaterThan(0);
                 expect(result.perPageCount).toBeGreaterThan(0);
@@ -351,10 +351,10 @@ describe("RedMetrics.js", function() {
         });
 
         it("can't list events on wrong gameVersion", function(done) {
-            redmetrics.executeQuery(RedMetricsConfig, { 
+            redmetrics.executeQuery({ 
                 gameVersion: "xxx",
                 entityType: "event" 
-            }).then(function(result) {
+            }, RedMetricsConfig).then(function(result) {
                 // Shouldn't get here 
                 expect(false).toBe(true);
                 done();
@@ -365,10 +365,10 @@ describe("RedMetrics.js", function() {
         });
 
         it("can get next and previous pages", function(done) {
-            redmetrics.executeQuery(RedMetricsConfig, { 
+            redmetrics.executeQuery({ 
                 gameVersion: RedMetricsConfig.gameVersionId,
                 entityType: "event" 
-            }).then(function(result) {
+            }, RedMetricsConfig).then(function(result) {
                 expect(result.pageNumber).toBe(1);
 
                 expect(result.hasPreviousPage()).toBe(false);
@@ -393,11 +393,11 @@ describe("RedMetrics.js", function() {
         });
 
         it("can sort", function(done) {
-            redmetrics.executeQuery(RedMetricsConfig, { 
+            redmetrics.executeQuery({ 
                 gameVersion: RedMetricsConfig.gameVersionId,
                 entityType: "event",
                 orderBy: ["serverTime:desc"] 
-            }).then(function(result) {
+            }, RedMetricsConfig).then(function(result) {
                 expect(result.data.length).toBeGreaterThan(0);
                 for(var i = 1; i < result.data.length; i++) {
                     expect(result.data[i - 1].serverTime >= result.data[i].serverTime).toBe(true);

@@ -26,7 +26,7 @@
             // Get options passed to the factory. Works even if connectionOptions is undefined 
             options: _.defaults({}, connectionOptions, {
                 protocol: "https",
-                host: "api.writeConnection.io",
+                host: "api.redmetrics.io",
                 port: 443,
                 bufferingDelay: 5000,
                 player: {}
@@ -275,7 +275,6 @@
                 *   protocol
                 *   host
                 *   port
-            * bufferingDelay in milliseconds (default 5000)
             * gameVersionId
         The _searchFilter_ object contains:
             * game
@@ -291,12 +290,11 @@
             * page
             * perPage
     */
-    redmetrics.executeQuery = function(connectionOptions, searchFilter) {
-        _.defaults(connectionOptions, {
+    redmetrics.executeQuery = function(searchFilter, connectionOptions) {
+        _.defaults({}, connectionOptions, {
             protocol: "https",
             host: "api.writeConnection.io",
-            port: 443,
-            bufferingDelay: 5000
+            port: 443
         });
 
         // Build base URL
@@ -364,7 +362,7 @@
         var newSearchFilter = _.extend({}, queryResult.searchFilter, {
             page: queryResult.pageNumber + 1
         });
-        return redmetrics.executeQuery(queryResult.connectionOptions, newSearchFilter);
+        return redmetrics.executeQuery(newSearchFilter, queryResult.connectionOptions);
     }
 
     redmetrics.previousPage = function(queryResult) {
@@ -373,7 +371,7 @@
         var newSearchFilter = _.extend({}, queryResult.searchFilter, {
             page: queryResult.pageNumber - 1
         });
-        return redmetrics.executeQuery(queryResult.connectionOptions, newSearchFilter);
+        return redmetrics.executeQuery(newSearchFilter, queryResult.connectionOptions);
     }
 
     return redmetrics;
