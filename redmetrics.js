@@ -305,7 +305,7 @@
         }
 
         if(!searchFilter.entityType) {
-            throw new Error("Missting entityType");
+            throw new Error("Missing entityType");
         }
 
         // Copy over searchFilter

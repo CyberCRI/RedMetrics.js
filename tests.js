@@ -391,5 +391,20 @@ describe("RedMetrics.js", function() {
                 done();
             });
         });
+
+        it("can sort", function(done) {
+            redmetrics.executeQuery(RedMetricsConfig, { 
+                gameVersion: RedMetricsConfig.gameVersionId,
+                entityType: "event",
+                orderBy: ["serverTime:desc"] 
+            }).then(function(result) {
+                expect(result.data.length).toBeGreaterThan(0);
+                for(var i = 1; i < result.data.length; i++) {
+                    expect(result.data[i - 1].serverTime >= result.data[i].serverTime).toBe(true);
+                }
+
+                done();
+            });
+        });
     });
 });
