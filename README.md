@@ -200,7 +200,7 @@ After installing RedMetrics.js as described above, include `redmetrics-unity.js`
 <script type="text/javascript" src="bower_components/q-xhr/q-xhr.js"></script>
 <script type="text/javascript" src="bower_components/underscore/underscore.js"></script>
 <script type="text/javascript" src="bower_components/RedMetrics.js/redmetrics.js"></script>
-<script type="text/javascript" src="bower_components/RedMetrics.js/redmetrics.js"></script>
+<script type="text/javascript" src="bower_components/RedMetrics.js/redmetrics-unity.js"></script>
 ``
 
 Then you call `rmConnect()` from Unity, passing as an argument an options object serialized to a JSON string. 
