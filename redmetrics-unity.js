@@ -2,9 +2,12 @@
 
 // All functions take JSON-encoded strings
 
+var rmConnection = null;
+
 function rmConnect(optionsJson) {
     var options = JSON.parse(optionsJson);
-    redmetrics.connect(options).then(function() {
+    rmConnection = redmetrics.prepareWriteConnection(options);
+    rmConnection.connect().then(function() {
         console.log("Connected to RedMetrics");
     }).fail(function(error) {
         console.error("Cannot connect to RedMetrics", error);
@@ -12,12 +15,16 @@ function rmConnect(optionsJson) {
 }
 
 function rmDisconnect() {
-    redmetrics.disconnect();
+    rmConnection.disconnect().then(function() {
+        console.log("Disconnected from RedMetrics");
+    }).fail(function(error) {
+        console.error("Cannot disconnect from RedMetrics", error);
+    });
 }
 
 function rmPostEvent(eventJson) {
     var event = JSON.parse(eventJson);
-    redmetrics.postEvent(event).then(function() {
+    rmConnection.postEvent(event).then(function() {
         console.log("Event posted");
     }).fail(function(error) {
         console.error("Error posting event", error);
@@ -26,7 +33,7 @@ function rmPostEvent(eventJson) {
 
 function rmPostSnapshot(snapshotJson) {
     var snapshot = JSON.parse(snapshotJson);
-    redmetrics.postSnapshot(snapshot).then(function() {
+    rmConnection.postSnapshot(snapshot).then(function() {
         console.log("Snapshot posted");
     }).fail(function(error) {
         console.error("Error posting snapshot", error);
@@ -35,7 +42,7 @@ function rmPostSnapshot(snapshotJson) {
 
 function rmUpdatePlayer(playerJson) {
     var player = JSON.parse(playerJson);
-    redmetrics.updatePlayer(player).then(function() {
+    rmConnection.updatePlayer(player).then(function() {
         console.log("Player updated");
     }).fail(function(error) {
         console.error("Error updating player", error);
