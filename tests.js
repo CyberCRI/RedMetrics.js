@@ -367,7 +367,8 @@ describe("RedMetrics.js", function() {
         it("can get next and previous pages", function(done) {
             redmetrics.executeQuery({ 
                 gameVersion: RedMetricsConfig.gameVersionId,
-                entityType: "event" 
+                entityType: "event",
+                perPage: 1 // This way we are likely to have lots of pages
             }, RedMetricsConfig).then(function(result) {
                 expect(result.pageNumber).toBe(1);
 
